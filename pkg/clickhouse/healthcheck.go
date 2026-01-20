@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -60,4 +61,64 @@ func (c *Client) HealthCheckWithReconnect() (HealthStatus, error) {
 	}
 
 	return status, nil
+}
+
+func (c *Client) StartHealthCheck(interval time.Duration) {
+	if c.conn == nil {
+		log.Printf("connection is nil")
+		return
+	}
+
+	c.mu.Lock()
+	// Инициализируем канал если еще не инициализирован
+	if c.stopHealth == nil {
+		c.stopHealth = make(chan struct{})
+	}
+	c.mu.Unlock()
+
+	// Останавливаем предыдущий тикер если был
+	if c.healthTicker != nil {
+		c.healthTicker.Stop()
+	}
+
+	c.healthTicker = time.NewTicker(interval)
+
+	go func() {
+		for {
+			select {
+			case <-c.healthTicker.C:
+				status, err := c.HealthCheckWithReconnect()
+				if err != nil {
+					log.Printf("Health check failed: %v", err)
+				} else if status.Error != "" {
+					log.Printf("Health check warning: %s", status.Error)
+				} else {
+					log.Printf("Health check OK (latency: %v)", status.Latency)
+				}
+
+			case <-c.stopHealth:
+				if c.healthTicker != nil {
+					c.healthTicker.Stop()
+				}
+				return
+			}
+		}
+	}()
+
+	log.Printf("Health check started with interval: %v", interval)
+}
+
+func (c *Client) StopHealthCheck() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.stopHealth != nil {
+		close(c.stopHealth)
+		c.stopHealth = nil
+	}
+
+	if c.healthTicker != nil {
+		c.healthTicker.Stop()
+		c.healthTicker = nil
+	}
 }

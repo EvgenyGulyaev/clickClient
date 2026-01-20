@@ -14,6 +14,9 @@ type Client struct {
 	setting  *Setting
 	lastPing time.Time
 	health   bool
+	// Для Helth чека
+	healthTicker *time.Ticker
+	stopHealth   chan struct{}
 }
 
 func GetClickhouseClient(host, username, password, database string, port int, debug bool) (*Client, error) {
