@@ -1,22 +1,22 @@
 package main
 
 import (
-	"clickClient/iternal/config"
-	"clickClient/iternal/database"
-	"clickClient/iternal/http/routes"
+	"clickClient/internal/config"
+	"clickClient/internal/database"
+	"clickClient/internal/http/routes"
 	"clickClient/pkg/server"
 	"fmt"
 	"log"
-	"time"
 )
 
 func main() {
 	c := config.LoadConfig()
 
 	db := database.GetStatistics()
-
-	db.Client.StartHealthCheck(10 * time.Second)
-	defer db.Client.StopHealthCheck()
+	defer func() {
+		errDisc := db.Client.Disconnect()
+		log.Printf("Disconnected from server: %v", errDisc)
+	}()
 
 	getRoutes := map[string]server.Get{}
 	postRoutes := map[string]server.Post{

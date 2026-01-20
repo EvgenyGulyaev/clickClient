@@ -22,6 +22,7 @@ func GetStatistics() *Statistics {
 			env.Get("CLICKHOUSE_DATABASE", "statistics"),
 			env.GetInt("CLICKHOUSE_PORT", 9000),
 			env.GetBool("CLICKHOUSE_DEBUG", false),
+			env.GetBool("CLICKHOUSE_HEALTHCHECK", false),
 		)
 		if err != nil {
 			log.Println(err)

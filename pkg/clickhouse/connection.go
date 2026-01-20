@@ -19,7 +19,10 @@ type Client struct {
 	stopHealth   chan struct{}
 }
 
-func GetClickhouseClient(host, username, password, database string, port int, debug bool) (*Client, error) {
+func GetClickhouseClient(
+	host, username, password, database string,
+	port int,
+	debug, withHealthcheck bool) (*Client, error) {
 	s := &Setting{
 		Host:     host,
 		Username: username,
@@ -28,10 +31,18 @@ func GetClickhouseClient(host, username, password, database string, port int, de
 		Debug:    debug,
 		Port:     port,
 	}
-	c := &Client{setting: s}
+	c := &Client{
+		setting:    s,
+		stopHealth: make(chan struct{}), // ВАЖНО: инициализация здесь!
+		health:     false,
+		lastPing:   time.Time{},
+	}
 	err := c.Connect()
 	if err != nil {
 		return nil, err
+	}
+	if withHealthcheck {
+		c.startBackgroundHealthCheck()
 	}
 	return c, nil
 }
@@ -61,6 +72,23 @@ func (c *Client) Connect() error {
 	return nil
 }
 
+func (c *Client) Disconnect() error {
+	if c.stopHealth != nil {
+		close(c.stopHealth)
+	}
+
+	// Закрываем соединение
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.health = false
+
+	if c.conn != nil {
+		return c.conn.Close()
+	}
+	return nil
+}
+
 func (c *Client) setConnection(conn clickhouse.Conn) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -70,7 +98,7 @@ func (c *Client) setConnection(conn clickhouse.Conn) error {
 		return err
 	}
 	c.health = true
-	c.lastPing = time.Time{}
+	c.lastPing = time.Now()
 
 	c.conn = conn
 	return nil
