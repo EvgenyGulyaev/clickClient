@@ -1,0 +1,24 @@
+package main
+
+import (
+	"clickClient/iternal/config"
+	"clickClient/iternal/http/routes"
+	"clickClient/pkg/server"
+	"fmt"
+	"log"
+)
+
+func main() {
+	c := config.LoadConfig()
+
+	getRoutes := map[string]server.Get{}
+	postRoutes := map[string]server.Post{
+		"/query": {Callback: routes.PostQuery},
+	}
+
+	s := server.GetServer(fmt.Sprintf(":%s", c.Env["PORT"]), getRoutes, postRoutes)
+	err := s.StartHandle()
+	if err != nil {
+		log.Print(err)
+	}
+}

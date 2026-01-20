@@ -1,0 +1,41 @@
+package middleware
+
+import (
+	"log"
+	"net/http"
+
+	"github.com/go-www/silverlining"
+)
+
+type Hoc interface {
+	Check(func(c *silverlining.Context)) func(c *silverlining.Context)
+}
+
+const (
+	Token string = "jwt"
+)
+
+var keys = map[string]Hoc{
+	Token: GetJwt(),
+}
+
+func Use(ms []string, finalHandler func(c *silverlining.Context)) func(c *silverlining.Context) {
+	h := finalHandler
+	for i := len(ms) - 1; i >= 0; i-- {
+		mw, ok := keys[ms[i]]
+		if ok {
+			next := h
+			h = mw.Check(func(c *silverlining.Context) {
+				next(c)
+			})
+		}
+	}
+	return h
+}
+
+func handleError(ctx *silverlining.Context, value string) {
+	err := ctx.WriteJSON(http.StatusUnauthorized, value)
+	if err != nil {
+		log.Print(err)
+	}
+}
